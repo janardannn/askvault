@@ -28,9 +28,11 @@ interface Particle {
 export function ConstellationField({
   active = false,
   density = 1,
+  quiet = false,
 }: {
   active?: boolean;
   density?: number;
+  quiet?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const activeRef = useRef(active);
@@ -192,5 +194,12 @@ export function ConstellationField({
     };
   }, [density]);
 
-  return <canvas ref={canvasRef} className="constellation" aria-hidden />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="constellation"
+      style={{ opacity: quiet ? 0.32 : 1 }}
+      aria-hidden
+    />
+  );
 }

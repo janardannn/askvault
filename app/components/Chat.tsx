@@ -199,7 +199,7 @@ function ChatSession({
 
   return (
     <>
-      <ConstellationField active={busy} density={empty ? 1.25 : 0.7} />
+      <ConstellationField active={busy} density={empty ? 1.25 : 0.55} quiet={!empty} />
 
       <section className={`stream ${empty ? "is-empty" : ""}`}>
         {empty && (
