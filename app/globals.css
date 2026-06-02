@@ -821,6 +821,37 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 
+/* note references → open in Obsidian */
+.note-link {
+  color: var(--accent-soft);
+  text-decoration: none;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(169, 145, 247, 0.45);
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
+}
+.note-link:hover {
+  color: #fff;
+  border-bottom-color: var(--accent-soft);
+}
+/* when the link sits inside an inline code chip, keep it readable */
+.md-code-inline .note-link {
+  color: inherit;
+  border-bottom-color: rgba(169, 145, 247, 0.5);
+}
+.hit-path .note-link,
+.tool-note .note-link,
+.tool-head .note-link {
+  color: inherit;
+  border: none;
+}
+.hit-path .note-link:hover,
+.tool-note .note-link:hover,
+.tool-head .note-link:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* UI-only system markers (model switched, context compacted) */
 .meta-event {
   display: flex;

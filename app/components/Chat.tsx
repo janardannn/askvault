@@ -7,7 +7,13 @@ import { createVaultAgent } from "@/lib/agent";
 import { labelFor } from "@/lib/models";
 import { saveModel } from "@/lib/store";
 import { newChatId, saveTurn, type StoredChat, type MetaEvt } from "@/lib/chats";
-import type { NoteContent, SearchHit } from "@/lib/vault-browser";
+import { listNotes, type NoteContent, type SearchHit } from "@/lib/vault-browser";
+import {
+  buildNoteIndex,
+  NoteLink,
+  NoteLinksProvider,
+  type NoteIndex,
+} from "./NoteLinks";
 import { ConstellationField } from "./ConstellationField";
 import { Markdown } from "./Markdown";
 import { ModelSwitcher } from "./ModelSwitcher";
@@ -256,6 +262,20 @@ function ChatSession({
   });
   messagesRef.current = messages;
 
+  // index the real vault once so note references become "open in Obsidian" links
+  const [noteIndex, setNoteIndex] = useState<NoteIndex | null>(null);
+  useEffect(() => {
+    let alive = true;
+    listNotes(handle)
+      .then((notes) => {
+        if (alive) setNoteIndex(buildNoteIndex(vaultRef.current, notes));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [handle]);
+
   const [input, setInput] = useState("");
   const busy = status === "submitted" || status === "streaming";
   const endRef = useRef<HTMLDivElement>(null);
@@ -283,7 +303,7 @@ function ChatSession({
   const empty = messages.length === 0;
 
   return (
-    <>
+    <NoteLinksProvider value={noteIndex}>
       <ConstellationField active={busy} density={empty ? 1.25 : 0.55} quiet={!empty} />
 
       <section className={`stream ${empty ? "is-empty" : ""}`}>
@@ -345,7 +365,7 @@ function ChatSession({
           </svg>
         </button>
       </form>
-    </>
+    </NoteLinksProvider>
   );
 }
 
@@ -496,7 +516,16 @@ function ToolPart({ part }: { part: any }) {
         <span className="tool-icon">{meta.icon}</span>
         <span>
           {meta.verb}
-          {query ? ` “${query}”` : notePath ? ` ${notePath}` : ""}
+          {query ? (
+            ` “${query}”`
+          ) : notePath ? (
+            <>
+              {" "}
+              <NoteLink path={notePath} />
+            </>
+          ) : (
+            ""
+          )}
           {running ? "…" : ""}
         </span>
       </div>
@@ -512,7 +541,7 @@ function ToolPart({ part }: { part: any }) {
       )}
       {part.state === "output-available" && part.type === "tool-read_note" && (
         <div className="tool-note">
-          read {(part.output as NoteContent).path}
+          read <NoteLink path={(part.output as NoteContent).path} />
           {(part.output as NoteContent).truncated ? " · truncated" : ""}
         </div>
       )}
@@ -535,7 +564,7 @@ function SearchResults({ hits }: { hits: SearchHit[] }) {
         >
           <div className="hit-path">
             <span className="file-ico">◆</span>
-            {hit.path}
+            <NoteLink path={hit.path} />
           </div>
           {hit.matches[0] && (
             <pre className="hit-snippet">{hit.matches[0].text}</pre>
