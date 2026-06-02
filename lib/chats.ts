@@ -126,17 +126,22 @@ export async function saveTurn(params: {
   vaultLabel: string;
   events?: MetaEvt[];
 }): Promise<void> {
-  if (params.messages.length === 0) return;
+  // never persist empty-parts stubs — they fail validateUIMessages on reload
+  const messages = params.messages.filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (m: any) => Array.isArray(m?.parts) && m.parts.length > 0,
+  );
+  if (messages.length === 0) return;
   const existing = await getChat(params.id);
   const now = Date.now();
   await putChat({
     id: params.id,
-    title: deriveTitle(params.messages),
+    title: deriveTitle(messages),
     model: params.model,
     vaultLabel: params.vaultLabel,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-    messages: params.messages,
+    messages,
     events: params.events ?? existing?.events ?? [],
   });
 }

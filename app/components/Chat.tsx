@@ -223,11 +223,12 @@ function ChatSession({
     [apiKey, handle, onCompact],
   );
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, setMessages } = useChat({
     id: chatId,
     // stored messages are generic UIMessage[]; useChat infers a tool-specialized
-    // message type from the agent, so cast at this boundary.
-    messages: initialMessages as never,
+    // message type from the agent, so cast at this boundary. Sanitize so a
+    // previously-saved empty-parts stub can't poison the first send.
+    messages: sanitizeHistory(initialMessages) as never,
     transport,
     onFinish: ({ messages }) =>
       saveTurn({
@@ -238,7 +239,17 @@ function ChatSession({
         events: eventsRef.current,
       }),
     onError: (err) => {
-      const afterId = messagesRef.current[messagesRef.current.length - 1]?.id ?? null;
+      // the SDK swallows caught errors — log the raw one so the stack is visible
+      console.error("[askvault] send error:", err);
+      // CRITICAL: a failed turn leaves a poisoned message in history (empty
+      // assistant stub or a dangling tool-call). The transport re-validates the
+      // WHOLE history on every send, so that poison makes all future sends throw
+      // client-side (no network call) until a new chat. Strip it so resends work.
+      const cleaned = sanitizeHistory(messagesRef.current as UIMessage[]);
+      messagesRef.current = cleaned;
+      setMessages(cleaned as never);
+
+      const afterId = cleaned[cleaned.length - 1]?.id ?? null;
       const last = eventsRef.current[eventsRef.current.length - 1];
       if (last?.kind === "error" && last.afterId === afterId) return; // don't stack
       const next: MetaEvt[] = [
@@ -252,10 +263,10 @@ function ChatSession({
         },
       ];
       setEvents(next);
-      // persist the failed turn so the user's message + the error aren't lost
+      // persist the failed turn (cleaned) so the user's message + error aren't lost
       saveTurn({
         id: chatId,
-        messages: messagesRef.current as UIMessage[],
+        messages: cleaned,
         model: modelRef.current,
         vaultLabel: vaultRef.current,
         events: next,
@@ -333,16 +344,30 @@ function ChatSession({
 
         {interleave(messages, events)}
 
-        {busy && messages[messages.length - 1]?.role === "user" && (
-          <div className="row row-assistant">
-            <Avatar />
-            <div className="msg-body">
-              <div className="thinking">
-                <span /> <span /> <span />
+        {busy &&
+          (() => {
+            // show "thinking" while waiting — incl. when the assistant message
+            // exists but has no visible content yet (we hide empty stubs)
+            const last = messages[messages.length - 1];
+            const lastHasContent =
+              last?.role === "assistant" &&
+              last.parts.some(
+                (p: any) =>
+                  (p.type === "text" && p.text?.trim()) ||
+                  (typeof p.type === "string" && p.type.startsWith("tool-")),
+              );
+            if (last && last.role !== "user" && lastHasContent) return null;
+            return (
+              <div className="row row-assistant">
+                <Avatar />
+                <div className="msg-body">
+                  <div className="thinking">
+                    <span /> <span /> <span />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            );
+          })()}
 
         <div ref={endRef} />
       </section>
@@ -379,20 +404,54 @@ function Avatar() {
   );
 }
 
+/**
+ * Remove any message with no parts. A failed turn leaves an empty assistant
+ * stub (`{ parts: [] }`) ANYWHERE in the history, and validateUIMessages rejects
+ * every message with zero parts ("Message must contain at least one part") on
+ * EVERY subsequent send — throwing before the network call, until a new chat.
+ * So we must drop empty-parts messages (not just trailing ones).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeHistory(msgs: any[]): any[] {
+  const clean = (msgs ?? []).filter(
+    (m) => Array.isArray(m?.parts) && m.parts.length > 0,
+  );
+  return clean.length === (msgs?.length ?? 0) ? msgs : clean;
+}
+
 /** Turn a raw model/transport error into a clean, human reason. */
 function explainError(err: unknown, model: string): string {
-  const msg = (err instanceof Error ? err.message : String(err ?? "")).toLowerCase();
-  if (/402|credit|insufficient|payment|requires more/.test(msg))
-    return `${model} needs OpenRouter credits — add credits, or switch to a free model.`;
-  if (/401|unauthor|invalid api key|no auth/.test(msg))
-    return `Your OpenRouter key was rejected. Lock and re-enter it to fix this.`;
-  if (/404|not found|no endpoints|no allowed providers/.test(msg))
-    return `${model} isn't available on your account right now. Try another model.`;
-  if (/429|rate.?limit|too many/.test(msg))
-    return `${model} is rate-limited right now. Wait a moment, then try again.`;
-  if (/network|failed to fetch|fetch failed|connection|timeout/.test(msg))
-    return `Couldn't reach OpenRouter — looks like a network hiccup. Try again.`;
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const e = err as any;
+  const status: number | undefined =
+    e?.statusCode ?? e?.status ?? e?.cause?.statusCode ?? e?.data?.error?.code;
+  let providerMsg = "";
+  try {
+    const body = e?.responseBody ?? e?.data ?? e?.cause?.responseBody;
+    const parsed = typeof body === "string" ? JSON.parse(body) : body;
+    providerMsg = parsed?.error?.message ?? parsed?.message ?? "";
+  } catch {
+    /* not JSON */
+  }
+  const isFree = model.endsWith(":free");
+  const raw = `${status ?? ""} ${providerMsg} ${e?.message ?? String(err ?? "")}`.toLowerCase();
+
+  if (status === 401 || /\b401\b|unauthor|invalid api key|no auth|user not found/.test(raw))
+    return `Your OpenRouter key was rejected — it may have been rotated or revoked. Lock and re-enter your current key.`;
+  if (status === 402 || /\b402\b|insufficient|credit|payment|requires more/.test(raw))
+    return `Out of OpenRouter credits for ${model}. Add credits at openrouter.ai/credits${isFree ? "" : " (or pick a free model)"}.`;
+  if (status === 429 || /\b429\b|rate.?limit|too many/.test(raw))
+    return isFree
+      ? `Free models are rate-limited right now — switch to a cheap paid model (e.g. DeepSeek V4 Flash) or wait a bit.`
+      : `Rate-limited by OpenRouter — wait a moment, then retry.`;
+  if (status === 404 || /\b404\b|no endpoints|no allowed providers|not found/.test(raw))
+    return `${model} isn't available right now. Try another model.`;
+  if (/failed to fetch|load failed|network|connection|timeout|cors/.test(raw))
+    return `Couldn't reach OpenRouter — network/CORS issue. Check your connection and try again.`;
+  if (providerMsg) return `${model}: ${providerMsg}`;
+  if (status) return `${model} failed (HTTP ${status}). Try again, or switch models.`;
   return `Couldn't get a response from ${model}. Try again, or switch models.`;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 /** Render messages with UI-only markers/errors interleaved at their anchor points. */
@@ -468,6 +527,11 @@ function AssistantRow({ message }: { message: any }) {
     .map((p: any) => p.text)
     .join("\n\n")
     .trim();
+  const hasContent =
+    text.length > 0 ||
+    message.parts.some(
+      (p: any) => typeof p.type === "string" && p.type.startsWith("tool-"),
+    );
 
   async function copy() {
     try {
@@ -478,6 +542,9 @@ function AssistantRow({ message }: { message: any }) {
       /* ignore */
     }
   }
+
+  // an errored turn can leave an empty assistant stub (just the model badge) — skip it
+  if (!hasContent) return null;
 
   return (
     <div className="row row-assistant">
