@@ -7,7 +7,8 @@ export interface MetaEvt {
   id: string;
   kind: "model" | "compact" | "error";
   label?: string;
-  reason?: string; // for error events
+  reason?: string; // for error events — clean human message
+  detail?: string; // for error events — raw error (shown on "show details")
   model?: string; // for error events
   afterId: string | null;
 }
@@ -21,6 +22,8 @@ export interface StoredChat {
   updatedAt: number;
   messages: UIMessage[];
   events?: MetaEvt[];
+  pinned?: boolean;
+  titleCustom?: boolean; // user renamed it — don't auto-overwrite
 }
 
 export function newChatId(): string {
@@ -109,6 +112,8 @@ export async function importChats(raw: unknown): Promise<number> {
       updatedAt: incomingUpdatedAt,
       messages: c.messages,
       events: Array.isArray(c.events) ? c.events : [],
+      pinned: !!c.pinned,
+      titleCustom: !!c.titleCustom,
     });
     n++;
   }
@@ -136,12 +141,31 @@ export async function saveTurn(params: {
   const now = Date.now();
   await putChat({
     id: params.id,
-    title: deriveTitle(messages),
+    // keep a user-renamed title; otherwise derive from the first message
+    title: existing?.titleCustom ? existing.title : deriveTitle(messages),
+    titleCustom: existing?.titleCustom,
     model: params.model,
     vaultLabel: params.vaultLabel,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     messages,
     events: params.events ?? existing?.events ?? [],
+    pinned: existing?.pinned,
   });
+}
+
+/** Rename a chat (marks the title as user-set so it won't auto-overwrite). */
+export async function renameChat(id: string, title: string): Promise<void> {
+  const c = await getChat(id);
+  if (!c) return;
+  const next = title.trim();
+  if (!next) return;
+  await putChat({ ...c, title: next, titleCustom: true });
+}
+
+/** Pin / unpin a chat. */
+export async function setChatPinned(id: string, pinned: boolean): Promise<void> {
+  const c = await getChat(id);
+  if (!c) return;
+  await putChat({ ...c, pinned });
 }

@@ -217,8 +217,11 @@ function ChatSession({
     () =>
       new DirectChatTransport({
         agent: createVaultAgent(apiKey, () => modelRef.current, handle, onCompact),
-        // stamp each assistant message with the model that produced it
-        messageMetadata: () => ({ model: modelRef.current }),
+        // stamp each assistant message with the model + a timestamp
+        messageMetadata: () => ({
+          model: modelRef.current,
+          createdAt: new Date().toISOString(),
+        }),
       }),
     [apiKey, handle, onCompact],
   );
@@ -258,6 +261,7 @@ function ChatSession({
           id: `e${Date.now()}`,
           kind: "error",
           reason: explainError(err, modelRef.current),
+          detail: rawError(err),
           model: modelRef.current,
           afterId,
         },
@@ -275,19 +279,21 @@ function ChatSession({
   });
   messagesRef.current = messages;
 
-  // index the real vault once so note references become "open in Obsidian" links
+  // index the real vault so note references become "open in Obsidian" links.
+  // re-walk it (cheap) on mount, on window focus (after editing in Obsidian),
+  // and on each send — so notes created/renamed mid-session still linkify.
+  // since linkify is render-time, refreshing re-links the whole transcript.
   const [noteIndex, setNoteIndex] = useState<NoteIndex | null>(null);
-  useEffect(() => {
-    let alive = true;
+  const refreshIndex = useCallback(() => {
     listNotes(handle)
-      .then((notes) => {
-        if (alive) setNoteIndex(buildNoteIndex(vaultRef.current, notes));
-      })
+      .then((notes) => setNoteIndex(buildNoteIndex(vaultRef.current, notes)))
       .catch(() => {});
-    return () => {
-      alive = false;
-    };
   }, [handle]);
+  useEffect(() => {
+    refreshIndex();
+    window.addEventListener("focus", refreshIndex);
+    return () => window.removeEventListener("focus", refreshIndex);
+  }, [refreshIndex]);
 
   const [input, setInput] = useState("");
   const busy = status === "submitted" || status === "streaming";
@@ -299,6 +305,7 @@ function ChatSession({
 
   function submit(text: string) {
     if (!text.trim() || busy) return;
+    refreshIndex(); // pick up notes created/renamed since the chat opened
     // mark a model switch only when this message actually USES a different model
     // than the previous message — never on the first message or a mere dropdown change.
     if (messages.length > 0 && model !== lastUsedModelRef.current) {
@@ -309,7 +316,7 @@ function ChatSession({
       ]);
     }
     lastUsedModelRef.current = model;
-    sendMessage({ text });
+    sendMessage({ text, metadata: { createdAt: new Date().toISOString() } } as never);
     setInput("");
   }
 
@@ -419,6 +426,23 @@ function sanitizeHistory(msgs: any[]): any[] {
   return clean.length === (msgs?.length ?? 0) ? msgs : clean;
 }
 
+/** The full raw error (for the "show details" expander — copyable, console-like). */
+function rawError(err: unknown): string {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const e = err as any;
+  if (!e) return "Unknown error";
+  const segs: string[] = [];
+  if (e.name || e.message) segs.push(`${e.name ?? "Error"}: ${e.message ?? ""}`.trim());
+  const body = e.responseBody ?? e.cause?.responseBody ?? e.data;
+  if (body)
+    segs.push(
+      "Response: " + (typeof body === "string" ? body : JSON.stringify(body, null, 2)),
+    );
+  if (e.stack) segs.push(String(e.stack));
+  return segs.join("\n\n") || String(err);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
 /** Turn a raw model/transport error into a clean, human reason. */
 function explainError(err: unknown, model: string): string {
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -454,13 +478,21 @@ function explainError(err: unknown, model: string): string {
   /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
+/** Short visible clock for a message, e.g. "12:40 AM". */
+function fmtClock(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return undefined;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 /** Render messages with UI-only markers/errors interleaved at their anchor points. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function interleave(messages: any[], events: MetaEvt[]) {
   const out: React.ReactNode[] = [];
   const render = (e: MetaEvt) =>
     e.kind === "error" ? (
-      <ErrorRow key={e.id} reason={e.reason ?? ""} />
+      <ErrorRow key={e.id} reason={e.reason ?? ""} detail={e.detail} />
     ) : (
       <MetaEvent key={e.id} evt={e} />
     );
@@ -494,7 +526,18 @@ function MetaEvent({ evt }: { evt: MetaEvt }) {
   );
 }
 
-function ErrorRow({ reason }: { reason: string }) {
+function ErrorRow({ reason, detail }: { reason: string; detail?: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(detail ?? "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* ignore */
+    }
+  }
   return (
     <div className="row row-assistant">
       <Avatar />
@@ -503,9 +546,47 @@ function ErrorRow({ reason }: { reason: string }) {
           <span className="msg-who">askvault</span>
         </div>
         <div className="error-line">{reason}</div>
+        {detail && (
+          <div className="error-detail">
+            <button className="error-toggle" onClick={() => setOpen((o) => !o)}>
+              <svg
+                className={`error-chev ${open ? "open" : ""}`}
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {open ? "hide details" : "show details"}
+            </button>
+            {open && (
+              <div className="error-raw">
+                <button className="error-copy" onClick={copy} title="Copy raw error">
+                  {copied ? "copied" : "copy"}
+                </button>
+                <pre>{detail}</pre>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+/** Full date + time for the hover tooltip, e.g. "Jun 3, 2026, 12:40 AM". */
+function fmtTime(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return undefined;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -513,9 +594,17 @@ function UserRow({ message }: { message: any }) {
   const text = message.parts
     .map((p: any) => (p.type === "text" ? p.text : ""))
     .join("");
+  const iso = message.metadata?.createdAt;
   return (
     <div className="row row-user">
-      <div className="bubble-user">{text}</div>
+      <div className="u-wrap">
+        <div className="bubble-user">{text}</div>
+        {fmtClock(iso) && (
+          <time className="msg-time" data-full={fmtTime(iso)}>
+            {fmtClock(iso)}
+          </time>
+        )}
+      </div>
     </div>
   );
 }
@@ -572,6 +661,11 @@ function AssistantRow({ message }: { message: any }) {
                 </span>
               );
             })()}
+          {fmtClock(message.metadata?.createdAt) && (
+            <time className="msg-time" data-full={fmtTime(message.metadata.createdAt)}>
+              {fmtClock(message.metadata.createdAt)}
+            </time>
+          )}
           {text && (
             <button className="copy-btn" onClick={copy} title="Copy">
               {copied ? "copied" : "copy"}
