@@ -25,6 +25,13 @@ export interface NoteContent {
   path: string;
   content: string;
   truncated: boolean;
+  modifiedAt: string; // ISO timestamp of last edit
+}
+
+export interface NoteMeta {
+  path: string;
+  modifiedAt: string; // ISO timestamp of last edit
+  sizeKB: number;
 }
 
 function isMarkdown(name: string): boolean {
@@ -58,6 +65,48 @@ export async function listNotes(
   const notes: string[] = [];
   await collectNotes(root, "", notes);
   return notes.sort();
+}
+
+/** Recursively collect notes WITH file metadata (last-edited, size). */
+async function collectNotesWithMeta(
+  dir: FileSystemDirectoryHandle,
+  prefix: string,
+  acc: NoteMeta[],
+): Promise<void> {
+  if (acc.length >= MAX_FILES_SCANNED) return;
+  // @ts-expect-error - async iterator on directory handles is standard but
+  // not yet in TS lib.dom types.
+  for await (const [name, handle] of dir.entries()) {
+    if (acc.length >= MAX_FILES_SCANNED) return;
+    const rel = prefix ? `${prefix}/${name}` : name;
+    if (handle.kind === "directory") {
+      if (IGNORED_DIRS.has(name)) continue;
+      await collectNotesWithMeta(handle as FileSystemDirectoryHandle, rel, acc);
+    } else if (isMarkdown(name)) {
+      try {
+        const file = await (handle as FileSystemFileHandle).getFile();
+        acc.push({
+          path: rel,
+          modifiedAt: new Date(file.lastModified).toISOString(),
+          sizeKB: Math.round((file.size / 1024) * 10) / 10,
+        });
+      } catch {
+        /* skip unreadable */
+      }
+    }
+  }
+}
+
+/**
+ * List notes with their metadata so the model can reason about recency,
+ * size, etc. itself (most-recently-edited, edited-this-week, biggest note…).
+ */
+export async function listNotesWithMeta(
+  root: FileSystemDirectoryHandle,
+): Promise<NoteMeta[]> {
+  const acc: NoteMeta[] = [];
+  await collectNotesWithMeta(root, "", acc);
+  return acc.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /** Walk a vault-relative path to its file handle (read-only). */
@@ -132,11 +181,14 @@ export async function readNote(
   root: FileSystemDirectoryHandle,
   relativePath: string,
 ): Promise<NoteContent> {
-  const raw = await readFileText(root, relativePath);
+  const handle = await fileHandleFor(root, relativePath);
+  const file = await handle.getFile();
+  const raw = await file.text();
   const truncated = raw.length > MAX_NOTE_CHARS;
   return {
     path: relativePath,
     content: truncated ? raw.slice(0, MAX_NOTE_CHARS) : raw,
     truncated,
+    modifiedAt: new Date(file.lastModified).toISOString(),
   };
 }

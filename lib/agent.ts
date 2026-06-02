@@ -13,19 +13,21 @@
 import { ToolLoopAgent, stepCountIs, tool } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
-import { listNotes, readNote, searchVault } from "./vault-browser";
+import { listNotesWithMeta, readNote, searchVault } from "./vault-browser";
 import { budgetFor, compactModelMessages, getContextLength } from "./context";
 
 const INSTRUCTIONS = `You are askvault, an assistant that helps the user FIND notes in their Obsidian vault.
 
 The user has granted read access to exactly one folder — their vault. You can only ever see notes inside it; nothing outside exists to you.
 
-Your job is to locate and list relevant notes based on the user's question or the ongoing conversation. You can search note contents and filenames, list notes, and read a note to confirm relevance.
+Your job is to locate and list relevant notes based on the user's question or the ongoing conversation. You can search note contents and filenames, list notes (with each note's last-edited date and size), and read a note (which also returns its last-edited date) to confirm relevance.
 
 Rules:
 - You are strictly read-only. You cannot create, edit, append to, rename, or delete notes — you have no tools to do so.
 - When you reference a note, give its vault-relative path (e.g. "Projects/roadmap.md") so the user can open it.
 - Prefer to actually search before answering. Use read_note only when you need to confirm relevance or summarize.
+- For time/date/recency/size questions, call list_notes — it returns every note's path, last-edited timestamp (modifiedAt, ISO) and size (sizeKB). Reason over the filenames and timestamps yourself to answer (filter/sort by date, find the latest, etc.).
+- Only the last-edited date is available, not an OS creation date. For a note created and never edited, last-edited ≈ creation; creation recorded inside a note can be found by reading it.
 - Be concise. Present matches as a short list with a one-line reason each. If nothing matches, say so plainly.`;
 
 export function createVaultAgent(
@@ -65,13 +67,13 @@ export function createVaultAgent(
       }),
       list_notes: tool({
         description:
-          "List note paths in the vault. Use to browse what exists when a search is too narrow.",
+          "List every note in the vault WITH metadata: path, last-edited timestamp (modifiedAt, ISO 8601) and size (sizeKB). Use to browse, and especially to answer recency/date/size questions (most recently edited, edited on/around a date, biggest note) by reasoning over the returned metadata.",
         inputSchema: z.object({}),
-        execute: async () => listNotes(root),
+        execute: async () => listNotesWithMeta(root),
       }),
       read_note: tool({
         description:
-          "Read the full contents of a single note by its vault-relative path. Use to confirm relevance or summarize.",
+          "Read the full contents of a single note by its vault-relative path. Also returns the note's last-edited timestamp (modifiedAt). Use to confirm relevance or summarize.",
         inputSchema: z.object({
           path: z
             .string()
