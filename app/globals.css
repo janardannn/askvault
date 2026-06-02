@@ -789,6 +789,38 @@ button { font-family: inherit; }
   letter-spacing: 0.01em;
   color: var(--accent-soft);
 }
+.msg-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+.msg-model-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+.msg-model-logo {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  background-color: var(--accent-soft);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
 .copy-btn {
   opacity: 0;
   margin-left: auto;

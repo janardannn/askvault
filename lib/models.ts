@@ -46,6 +46,28 @@ export const MODELS: ModelOption[] = [
   ...PREMIUM_MODELS,
 ];
 
+// model-id provider prefix → vendored lobehub icon slug (public/model-icons/<slug>.svg)
+const PROVIDER_ICON: Record<string, string> = {
+  openai: "openai",
+  anthropic: "claude",
+  google: "gemini",
+  "x-ai": "grok",
+  deepseek: "deepseek",
+  qwen: "qwen",
+  moonshotai: "kimi",
+  minimax: "minimax",
+  mistralai: "mistral",
+  "meta-llama": "meta",
+  "z-ai": "chatglm",
+  stepfun: "stepfun",
+};
+
+/** Path to the provider logo for a model id, or null (→ fall back to a dot). */
+export function providerIconSrc(id: string): string | null {
+  const slug = PROVIDER_ICON[id.split("/")[0]];
+  return slug ? `/model-icons/${slug}.svg` : null;
+}
+
 export function labelFor(id: string): string {
   const known = MODELS.find((m) => m.id === id);
   if (known) return known.label;

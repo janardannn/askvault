@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DirectChatTransport, type UIMessage } from "ai";
 import { createVaultAgent } from "@/lib/agent";
-import { labelFor } from "@/lib/models";
+import { labelFor, providerIconSrc } from "@/lib/models";
 import { saveModel } from "@/lib/store";
 import { newChatId, saveTurn, type StoredChat, type MetaEvt } from "@/lib/chats";
 import { listNotes, type NoteContent, type SearchHit } from "@/lib/vault-browser";
@@ -217,6 +217,8 @@ function ChatSession({
     () =>
       new DirectChatTransport({
         agent: createVaultAgent(apiKey, () => modelRef.current, handle, onCompact),
+        // stamp each assistant message with the model that produced it
+        messageMetadata: () => ({ model: modelRef.current }),
       }),
     [apiKey, handle, onCompact],
   );
@@ -483,6 +485,26 @@ function AssistantRow({ message }: { message: any }) {
       <div className="msg-body">
         <div className="msg-meta">
           <span className="msg-who">askvault</span>
+          {message.metadata?.model &&
+            (() => {
+              const icon = providerIconSrc(message.metadata.model);
+              return (
+                <span className="msg-model" title={message.metadata.model}>
+                  {icon ? (
+                    <span
+                      className="msg-model-logo"
+                      style={{
+                        WebkitMaskImage: `url(${icon})`,
+                        maskImage: `url(${icon})`,
+                      }}
+                    />
+                  ) : (
+                    <span className="msg-model-dot" />
+                  )}
+                  {labelFor(message.metadata.model)}
+                </span>
+              );
+            })()}
           {text && (
             <button className="copy-btn" onClick={copy} title="Copy">
               {copied ? "copied" : "copy"}
