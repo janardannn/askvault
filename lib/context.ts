@@ -92,13 +92,13 @@ export function compactModelMessages(messages: any[], budget: number): any[] {
     used += t;
   }
 
-  const trimmed = turns.length > kept.length;
-  const note = trimmed
+  const compacted = turns.length > kept.length;
+  const note = compacted
     ? [
         {
           role: "system",
           content:
-            "[Earlier messages in this conversation were trimmed to fit the model's context window.]",
+            "[Earlier messages in this conversation were compacted to fit the model's context window.]",
         },
       ]
     : [];

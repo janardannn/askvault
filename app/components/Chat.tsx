@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DirectChatTransport, type UIMessage } from "ai";
 import { createVaultAgent } from "@/lib/agent";
+import { labelFor } from "@/lib/models";
 import { saveModel } from "@/lib/store";
-import { newChatId, saveTurn, type StoredChat } from "@/lib/chats";
+import { newChatId, saveTurn, type StoredChat, type MetaEvt } from "@/lib/chats";
 import type { NoteContent, SearchHit } from "@/lib/vault-browser";
 import { ConstellationField } from "./ConstellationField";
 import { Markdown } from "./Markdown";
@@ -27,6 +28,7 @@ const TOOL_META: Record<string, { icon: string; verb: string }> = {
   "tool-read_note": { icon: "◆", verb: "Reading" },
 };
 
+
 export function Chat(props: {
   apiKey: string;
   model: string;
@@ -39,21 +41,23 @@ export function Chat(props: {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [migrateOpen, setMigrateOpen] = useState(false);
-  const [active, setActive] = useState<{ id: string; initial: UIMessage[] }>(
-    () => ({ id: newChatId(), initial: [] }),
-  );
+  const [active, setActive] = useState<{
+    id: string;
+    initial: UIMessage[];
+    events: MetaEvt[];
+  }>(() => ({ id: newChatId(), initial: [], events: [] }));
 
   function changeModel(next: string) {
     setModel(next);
     saveModel(next);
   }
   function newChat() {
-    setActive({ id: newChatId(), initial: [] });
+    setActive({ id: newChatId(), initial: [], events: [] });
   }
   function openChat(chat: StoredChat) {
     setModel(chat.model);
     saveModel(chat.model);
-    setActive({ id: chat.id, initial: chat.messages });
+    setActive({ id: chat.id, initial: chat.messages, events: chat.events ?? [] });
     setHistoryOpen(false);
   }
 
@@ -141,6 +145,7 @@ export function Chat(props: {
         key={active.id}
         chatId={active.id}
         initialMessages={active.initial}
+        initialEvents={active.events}
         apiKey={props.apiKey}
         model={model}
         handle={props.handle}
@@ -168,6 +173,7 @@ export function Chat(props: {
 function ChatSession({
   chatId,
   initialMessages,
+  initialEvents,
   apiKey,
   model,
   handle,
@@ -175,6 +181,7 @@ function ChatSession({
 }: {
   chatId: string;
   initialMessages: UIMessage[];
+  initialEvents: MetaEvt[];
   apiKey: string;
   model: string;
   handle: FileSystemDirectoryHandle;
@@ -185,16 +192,32 @@ function ChatSession({
   modelRef.current = model;
   const vaultRef = useRef(vaultLabel);
   vaultRef.current = vaultLabel;
+  const messagesRef = useRef<UIMessage[]>(initialMessages);
+
+  // UI-only system markers (model switched, context compacted) — never sent to the model
+  const [events, setEvents] = useState<MetaEvt[]>(initialEvents);
+  const eventsRef = useRef<MetaEvt[]>(initialEvents);
+  eventsRef.current = events;
+  // the model under which the last message was actually SENT
+  const lastUsedModelRef = useRef(model);
+
+  const onCompact = useCallback(() => {
+    setEvents((prev) => {
+      if (prev[prev.length - 1]?.kind === "compact") return prev; // don't repeat
+      const afterId = messagesRef.current[messagesRef.current.length - 1]?.id ?? null;
+      return [...prev, { id: `c${Date.now()}`, kind: "compact", afterId }];
+    });
+  }, []);
 
   const transport = useMemo(
     () =>
       new DirectChatTransport({
-        agent: createVaultAgent(apiKey, () => modelRef.current, handle),
+        agent: createVaultAgent(apiKey, () => modelRef.current, handle, onCompact),
       }),
-    [apiKey, handle],
+    [apiKey, handle, onCompact],
   );
 
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, status } = useChat({
     id: chatId,
     // stored messages are generic UIMessage[]; useChat infers a tool-specialized
     // message type from the agent, so cast at this boundary.
@@ -206,8 +229,34 @@ function ChatSession({
         messages: messages as UIMessage[],
         model: modelRef.current,
         vaultLabel: vaultRef.current,
+        events: eventsRef.current,
       }),
+    onError: (err) => {
+      const afterId = messagesRef.current[messagesRef.current.length - 1]?.id ?? null;
+      const last = eventsRef.current[eventsRef.current.length - 1];
+      if (last?.kind === "error" && last.afterId === afterId) return; // don't stack
+      const next: MetaEvt[] = [
+        ...eventsRef.current,
+        {
+          id: `e${Date.now()}`,
+          kind: "error",
+          reason: explainError(err, modelRef.current),
+          model: modelRef.current,
+          afterId,
+        },
+      ];
+      setEvents(next);
+      // persist the failed turn so the user's message + the error aren't lost
+      saveTurn({
+        id: chatId,
+        messages: messagesRef.current as UIMessage[],
+        model: modelRef.current,
+        vaultLabel: vaultRef.current,
+        events: next,
+      });
+    },
   });
+  messagesRef.current = messages;
 
   const [input, setInput] = useState("");
   const busy = status === "submitted" || status === "streaming";
@@ -219,6 +268,16 @@ function ChatSession({
 
   function submit(text: string) {
     if (!text.trim() || busy) return;
+    // mark a model switch only when this message actually USES a different model
+    // than the previous message — never on the first message or a mere dropdown change.
+    if (messages.length > 0 && model !== lastUsedModelRef.current) {
+      const afterId = messages[messages.length - 1]?.id ?? null;
+      setEvents((prev) => [
+        ...prev,
+        { id: `m${Date.now()}`, kind: "model", label: labelFor(model), afterId },
+      ]);
+    }
+    lastUsedModelRef.current = model;
     sendMessage({ text });
     setInput("");
   }
@@ -252,13 +311,7 @@ function ChatSession({
           </div>
         )}
 
-        {messages.map((message) =>
-          message.role === "user" ? (
-            <UserRow key={message.id} message={message} />
-          ) : (
-            <AssistantRow key={message.id} message={message} />
-          ),
-        )}
+        {interleave(messages, events)}
 
         {busy && messages[messages.length - 1]?.role === "user" && (
           <div className="row row-assistant">
@@ -266,18 +319,6 @@ function ChatSession({
             <div className="msg-body">
               <div className="thinking">
                 <span /> <span /> <span />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="row row-assistant">
-            <Avatar />
-            <div className="msg-body">
-              <div className="error-note">
-                Couldn’t reach the model. Check your key and that{" "}
-                <code className="md-code-inline">{model}</code> is available.
               </div>
             </div>
           </div>
@@ -314,6 +355,76 @@ function Avatar() {
   return (
     <div className="avatar">
       <Gem size={18} />
+    </div>
+  );
+}
+
+/** Turn a raw model/transport error into a clean, human reason. */
+function explainError(err: unknown, model: string): string {
+  const msg = (err instanceof Error ? err.message : String(err ?? "")).toLowerCase();
+  if (/402|credit|insufficient|payment|requires more/.test(msg))
+    return `${model} needs OpenRouter credits — add credits, or switch to a free model.`;
+  if (/401|unauthor|invalid api key|no auth/.test(msg))
+    return `Your OpenRouter key was rejected. Lock and re-enter it to fix this.`;
+  if (/404|not found|no endpoints|no allowed providers/.test(msg))
+    return `${model} isn't available on your account right now. Try another model.`;
+  if (/429|rate.?limit|too many/.test(msg))
+    return `${model} is rate-limited right now. Wait a moment, then try again.`;
+  if (/network|failed to fetch|fetch failed|connection|timeout/.test(msg))
+    return `Couldn't reach OpenRouter — looks like a network hiccup. Try again.`;
+  return `Couldn't get a response from ${model}. Try again, or switch models.`;
+}
+
+/** Render messages with UI-only markers/errors interleaved at their anchor points. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function interleave(messages: any[], events: MetaEvt[]) {
+  const out: React.ReactNode[] = [];
+  const render = (e: MetaEvt) =>
+    e.kind === "error" ? (
+      <ErrorRow key={e.id} reason={e.reason ?? ""} />
+    ) : (
+      <MetaEvent key={e.id} evt={e} />
+    );
+  const emit = (evts: MetaEvt[]) => evts.forEach((e) => out.push(render(e)));
+
+  emit(events.filter((e) => e.afterId === null));
+  for (const message of messages) {
+    out.push(
+      message.role === "user" ? (
+        <UserRow key={message.id} message={message} />
+      ) : (
+        <AssistantRow key={message.id} message={message} />
+      ),
+    );
+    emit(events.filter((e) => e.afterId === message.id));
+  }
+  return out;
+}
+
+function MetaEvent({ evt }: { evt: MetaEvt }) {
+  const text =
+    evt.kind === "model"
+      ? `switched to ${evt.label}`
+      : "compacted earlier context to fit the model";
+  return (
+    <div className="meta-event">
+      <span className="meta-line" />
+      <span className="meta-text">✦ {text}</span>
+      <span className="meta-line" />
+    </div>
+  );
+}
+
+function ErrorRow({ reason }: { reason: string }) {
+  return (
+    <div className="row row-assistant">
+      <Avatar />
+      <div className="msg-body msg-body-error">
+        <div className="msg-meta">
+          <span className="msg-who">askvault</span>
+        </div>
+        <div className="error-line">{reason}</div>
+      </div>
     </div>
   );
 }

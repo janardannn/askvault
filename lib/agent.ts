@@ -32,6 +32,7 @@ export function createVaultAgent(
   apiKey: string,
   getModel: () => string,
   root: FileSystemDirectoryHandle,
+  onCompact?: () => void,
 ) {
   const openrouter = createOpenRouter({ apiKey, appName: "askvault" });
 
@@ -44,13 +45,12 @@ export function createVaultAgent(
       const model = getModel();
       const ctx = await getContextLength(model, apiKey);
       const budget = budgetFor(ctx);
-      return {
-        ...settings,
-        model: openrouter(model),
-        messages: Array.isArray(settings.messages)
-          ? compactModelMessages(settings.messages, budget)
-          : settings.messages,
-      };
+      if (!Array.isArray(settings.messages)) {
+        return { ...settings, model: openrouter(model) };
+      }
+      const compacted = compactModelMessages(settings.messages, budget);
+      if (compacted.length < settings.messages.length) onCompact?.();
+      return { ...settings, model: openrouter(model), messages: compacted };
     },
     tools: {
       search_vault: tool({

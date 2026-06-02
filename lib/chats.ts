@@ -3,6 +3,15 @@
 import type { UIMessage } from "ai";
 import { openDb, CHATS_STORE } from "./db";
 
+export interface MetaEvt {
+  id: string;
+  kind: "model" | "compact" | "error";
+  label?: string;
+  reason?: string; // for error events
+  model?: string; // for error events
+  afterId: string | null;
+}
+
 export interface StoredChat {
   id: string;
   title: string;
@@ -11,6 +20,7 @@ export interface StoredChat {
   createdAt: number;
   updatedAt: number;
   messages: UIMessage[];
+  events?: MetaEvt[];
 }
 
 export function newChatId(): string {
@@ -94,6 +104,7 @@ export async function importChats(raw: unknown): Promise<number> {
       createdAt: c.createdAt ?? Date.now(),
       updatedAt: c.updatedAt ?? Date.now(),
       messages: c.messages,
+      events: Array.isArray(c.events) ? c.events : [],
     });
     n++;
   }
@@ -109,6 +120,7 @@ export async function saveTurn(params: {
   messages: UIMessage[];
   model: string;
   vaultLabel: string;
+  events?: MetaEvt[];
 }): Promise<void> {
   if (params.messages.length === 0) return;
   const existing = await getChat(params.id);
@@ -121,5 +133,6 @@ export async function saveTurn(params: {
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     messages: params.messages,
+    events: params.events ?? existing?.events ?? [],
   });
 }

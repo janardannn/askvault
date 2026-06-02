@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MODELS, labelFor } from "@/lib/models";
+import {
+  FREE_MODELS,
+  AFFORDABLE_MODELS,
+  PREMIUM_MODELS,
+  MODELS,
+  MODELS_UPDATED,
+  labelFor,
+  type ModelOption,
+} from "@/lib/models";
 
 export function ModelSwitcher({
   value,
@@ -32,6 +40,18 @@ export function ModelSwitcher({
 
   const known = MODELS.some((m) => m.id === value);
 
+  const Item = (m: ModelOption) => (
+    <button
+      type="button"
+      key={m.id}
+      className={`switcher-item ${m.id === value ? "sel" : ""}`}
+      onClick={() => choose(m.id)}
+    >
+      <span className="si-main">{m.label}</span>
+      <span className="si-note">{m.note}</span>
+    </button>
+  );
+
   return (
     <div className={`switcher ${block ? "switcher-block" : ""}`} ref={ref}>
       <button
@@ -49,29 +69,27 @@ export function ModelSwitcher({
 
       {open && (
         <div className="switcher-menu">
-          <div className="switcher-head">Model · free &amp; tool-capable</div>
-          {MODELS.map((m) => (
-            <button
-              type="button"
-              key={m.id}
-              className={`switcher-item ${m.id === value ? "sel" : ""}`}
-              onClick={() => choose(m.id)}
-            >
-              <span className="si-main">{m.label}</span>
-              <span className="si-note">{m.note}</span>
-            </button>
-          ))}
-          {!known && (
-            <button
-              type="button"
-              className="switcher-item sel"
-              onClick={() => setOpen(false)}
-            >
-              <span className="si-main">Custom</span>
-              <span className="si-note">{value}</span>
-            </button>
-          )}
-          {/* not a <form> — this can be nested inside another form (onboarding) */}
+          <div className="sm-cols">
+            <div className="sm-col">
+              <div className="switcher-head">Free</div>
+              {FREE_MODELS.map(Item)}
+            </div>
+            <div className="sm-col">
+              <div className="switcher-head">Affordable</div>
+              {AFFORDABLE_MODELS.map(Item)}
+            </div>
+            <div className="sm-col">
+              <div className="switcher-head">Premium</div>
+              {PREMIUM_MODELS.map(Item)}
+            </div>
+          </div>
+
+          <div className="sm-current">
+            current: <code>{value}</code>
+            {!known && <span className="sm-custom-tag">custom</span>}
+          </div>
+
+          {/* not a <form> — safe to nest inside the onboarding form */}
           <div className="switcher-custom">
             <input
               value={custom}
@@ -93,6 +111,10 @@ export function ModelSwitcher({
             >
               Use
             </button>
+          </div>
+
+          <div className="sm-updated">
+            curated list · updated {MODELS_UPDATED}
           </div>
         </div>
       )}
