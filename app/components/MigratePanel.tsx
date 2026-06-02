@@ -56,7 +56,7 @@ export function MigratePanel({ onClose }: { onClose: () => void }) {
       setStatus(
         n > 0
           ? `Imported ${n} chat${n === 1 ? "" : "s"}. Open history to see them.`
-          : "No chats found in that file.",
+          : "Nothing new to import — your chats are already up to date.",
       );
     } catch {
       setStatus("Couldn't read that file — make sure it's an askvault export.");

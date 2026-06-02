@@ -96,13 +96,17 @@ export async function importChats(raw: unknown): Promise<number> {
   let n = 0;
   for (const c of arr) {
     if (!c || typeof c.id !== "string" || !Array.isArray(c.messages)) continue;
+    const incomingUpdatedAt = c.updatedAt ?? Date.now();
+    // merge by id, last-write-wins: don't clobber a newer local chat with an older import
+    const existing = await getChat(c.id);
+    if (existing && existing.updatedAt >= incomingUpdatedAt) continue;
     await putChat({
       id: c.id,
       title: c.title ?? deriveTitle(c.messages),
       model: c.model ?? "",
       vaultLabel: c.vaultLabel ?? "imported",
-      createdAt: c.createdAt ?? Date.now(),
-      updatedAt: c.updatedAt ?? Date.now(),
+      createdAt: c.createdAt ?? incomingUpdatedAt,
+      updatedAt: incomingUpdatedAt,
       messages: c.messages,
       events: Array.isArray(c.events) ? c.events : [],
     });
