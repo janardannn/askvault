@@ -1,0 +1,101 @@
+/** Persisted conversations — stored locally in IndexedDB, never server-side. */
+
+import type { UIMessage } from "ai";
+import { openDb, CHATS_STORE } from "./db";
+
+export interface StoredChat {
+  id: string;
+  title: string;
+  model: string;
+  vaultLabel: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: UIMessage[];
+}
+
+export function newChatId(): string {
+  return crypto.randomUUID();
+}
+
+/** First user message → a short title. */
+export function deriveTitle(messages: UIMessage[]): string {
+  const firstUser = messages.find((m) => m.role === "user");
+  if (!firstUser) return "New chat";
+  const text = firstUser.parts
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((p: any) => (p.type === "text" ? p.text : ""))
+    .join(" ")
+    .trim();
+  if (!text) return "New chat";
+  return text.length > 60 ? text.slice(0, 60) + "…" : text;
+}
+
+export async function listChats(): Promise<StoredChat[]> {
+  const db = await openDb();
+  const all = await new Promise<StoredChat[]>((resolve, reject) => {
+    const tx = db.transaction(CHATS_STORE, "readonly");
+    const req = tx.objectStore(CHATS_STORE).getAll();
+    req.onsuccess = () => resolve(req.result as StoredChat[]);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function getChat(id: string): Promise<StoredChat | null> {
+  const db = await openDb();
+  const chat = await new Promise<StoredChat | null>((resolve, reject) => {
+    const tx = db.transaction(CHATS_STORE, "readonly");
+    const req = tx.objectStore(CHATS_STORE).get(id);
+    req.onsuccess = () => resolve((req.result as StoredChat) ?? null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return chat;
+}
+
+export async function putChat(chat: StoredChat): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(CHATS_STORE, "readwrite");
+    tx.objectStore(CHATS_STORE).put(chat);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+export async function deleteChat(id: string): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(CHATS_STORE, "readwrite");
+    tx.objectStore(CHATS_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+/**
+ * Save a turn's messages, preserving the original createdAt and refreshing
+ * updatedAt + title. Skips empty conversations.
+ */
+export async function saveTurn(params: {
+  id: string;
+  messages: UIMessage[];
+  model: string;
+  vaultLabel: string;
+}): Promise<void> {
+  if (params.messages.length === 0) return;
+  const existing = await getChat(params.id);
+  const now = Date.now();
+  await putChat({
+    id: params.id,
+    title: deriveTitle(params.messages),
+    model: params.model,
+    vaultLabel: params.vaultLabel,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    messages: params.messages,
+  });
+}
