@@ -45,7 +45,7 @@ export function createVaultAgent(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     prepareCall: async ({ options, ...settings }: any) => {
       const model = getModel();
-      const ctx = await getContextLength(model, apiKey);
+      const ctx = await getContextLength(model);
       const budget = budgetFor(ctx);
       if (!Array.isArray(settings.messages)) {
         return { ...settings, model: openrouter(model) };

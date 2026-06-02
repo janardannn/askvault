@@ -8,8 +8,12 @@ import {
   MODELS,
   MODELS_UPDATED,
   labelFor,
+  costLabel,
+  fmtCost,
+  tierFor,
   type ModelOption,
 } from "@/lib/models";
+import { getModelPricing } from "@/lib/context";
 
 export function ModelSwitcher({
   value,
@@ -24,6 +28,25 @@ export function ModelSwitcher({
   const [custom, setCustom] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
+  // resolve pricing for the current model — from the curated list if known,
+  // else live from OpenRouter (so a custom-typed id still shows cost + tier)
+  const [priceInfo, setPriceInfo] = useState<{ inCost: number; outCost: number } | null>(null);
+  useEffect(() => {
+    const m = MODELS.find((x) => x.id === value);
+    if (m) {
+      setPriceInfo({ inCost: m.inCost, outCost: m.outCost });
+      return;
+    }
+    setPriceInfo(null);
+    let alive = true;
+    getModelPricing(value).then((p) => {
+      if (alive) setPriceInfo(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
@@ -33,9 +56,9 @@ export function ModelSwitcher({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  function choose(id: string) {
+  function choose(id: string, keepOpen = false) {
     onChange(id);
-    setOpen(false);
+    if (!keepOpen) setOpen(false); // custom input keeps it open to show the new price/tier
   }
 
   const known = MODELS.some((m) => m.id === value);
@@ -47,8 +70,13 @@ export function ModelSwitcher({
       className={`switcher-item ${m.id === value ? "sel" : ""}`}
       onClick={() => choose(m.id)}
     >
-      <span className="si-main">{m.label}</span>
-      <span className="si-note">{m.note}</span>
+      <span className="si-text">
+        <span className="si-main">{m.label}</span>
+        <span className="si-note">{m.note}</span>
+      </span>
+      <span className={`si-cost ${m.inCost === 0 ? "free" : ""}`}>
+        {costLabel(m)}
+      </span>
     </button>
   );
 
@@ -71,22 +99,41 @@ export function ModelSwitcher({
         <div className="switcher-menu">
           <div className="sm-cols">
             <div className="sm-col">
-              <div className="switcher-head">Free</div>
+              <div className="switcher-head">
+                Free <span className="sm-head-rule">$0</span>
+              </div>
               {FREE_MODELS.map(Item)}
             </div>
             <div className="sm-col">
-              <div className="switcher-head">Affordable</div>
+              <div className="switcher-head">
+                Affordable <span className="sm-head-rule">≤$3 in · ≤$5 out</span>
+              </div>
               {AFFORDABLE_MODELS.map(Item)}
             </div>
             <div className="sm-col">
-              <div className="switcher-head">Premium</div>
+              <div className="switcher-head">
+                Premium <span className="sm-head-rule">pricier</span>
+              </div>
               {PREMIUM_MODELS.map(Item)}
             </div>
           </div>
 
           <div className="sm-current">
-            current: <code>{value}</code>
-            {!known && <span className="sm-custom-tag">custom</span>}
+            <span className="sm-cur-id">
+              current: <code>{value}</code>
+            </span>
+            {priceInfo ? (
+              <span className="sm-cur-price">
+                {fmtCost(priceInfo.inCost, priceInfo.outCost)}
+                <span
+                  className={`sm-tier tier-${tierFor(priceInfo.inCost, priceInfo.outCost)}`}
+                >
+                  {tierFor(priceInfo.inCost, priceInfo.outCost)}
+                </span>
+              </span>
+            ) : (
+              !known && <span className="sm-cur-price sm-cur-unknown">checking price…</span>
+            )}
           </div>
 
           {/* not a <form> — safe to nest inside the onboarding form */}
@@ -97,7 +144,7 @@ export function ModelSwitcher({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  if (custom.trim()) choose(custom.trim());
+                  if (custom.trim()) choose(custom.trim(), true);
                 }
               }}
               placeholder="any OpenRouter model id…"
@@ -106,7 +153,7 @@ export function ModelSwitcher({
             <button
               type="button"
               onClick={() => {
-                if (custom.trim()) choose(custom.trim());
+                if (custom.trim()) choose(custom.trim(), true);
               }}
             >
               Use

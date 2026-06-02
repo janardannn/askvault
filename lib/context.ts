@@ -12,7 +12,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const ctxCache: Record<string, number> = {};
-let fetchedAll = false;
+const priceCache: Record<string, { inCost: number; outCost: number }> = {};
+let loaded = false;
+let loading: Promise<void> | null = null;
 
 /** ~4 chars per token is a good cross-model estimate. */
 export function estimateTokens(text: string): number {
@@ -25,27 +27,46 @@ function msgTokens(m: any): number {
   return estimateTokens(content) + 4; // small per-message overhead
 }
 
-/** Fetch (once) and cache each model's context length from OpenRouter. */
-export async function getContextLength(
-  modelId: string,
-  apiKey: string,
-): Promise<number> {
-  if (ctxCache[modelId]) return ctxCache[modelId];
-  if (!fetchedAll) {
+/** Fetch the OpenRouter model catalog once (public endpoint, no key needed). */
+function ensureCatalog(): Promise<void> {
+  if (loaded) return Promise.resolve();
+  if (loading) return loading;
+  loading = (async () => {
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/models", {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const res = await fetch("https://openrouter.ai/api/v1/models");
       const data = (await res.json())?.data as any[];
       for (const m of data ?? []) {
-        if (m?.id && m?.context_length) ctxCache[m.id] = m.context_length;
+        if (!m?.id) continue;
+        if (m.context_length) ctxCache[m.id] = m.context_length;
+        const inCost = parseFloat(m?.pricing?.prompt) * 1_000_000;
+        const outCost = parseFloat(m?.pricing?.completion) * 1_000_000;
+        if (!Number.isNaN(inCost)) {
+          priceCache[m.id] = {
+            inCost,
+            outCost: Number.isNaN(outCost) ? 0 : outCost,
+          };
+        }
       }
-      fetchedAll = true;
+      loaded = true;
     } catch {
-      // offline / blocked — fall back to a safe default below
+      // offline / blocked — callers fall back to safe defaults
     }
-  }
+  })();
+  return loading;
+}
+
+/** Cached context length for a model (fallback 32000). */
+export async function getContextLength(modelId: string): Promise<number> {
+  await ensureCatalog();
   return ctxCache[modelId] ?? 32000;
+}
+
+/** Live $/1M pricing for any model id, or null if unknown. */
+export async function getModelPricing(
+  modelId: string,
+): Promise<{ inCost: number; outCost: number } | null> {
+  await ensureCatalog();
+  return priceCache[modelId] ?? null;
 }
 
 /** Leave room for tools + the response. */

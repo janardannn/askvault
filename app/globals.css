@@ -611,15 +611,42 @@ button { font-family: inherit; }
 .sm-col + .sm-col { border-left: 1px solid var(--border-subtle); padding-left: 6px; }
 .sm-head-gap { margin-top: 4px; }
 .sm-current {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   font-size: 11px;
   color: var(--faint);
   padding: 8px 10px 2px;
 }
+.sm-cur-id { white-space: nowrap; }
 .sm-current code {
   color: var(--accent-soft);
   font-family: var(--font-mono-stack);
   word-break: break-all;
 }
+.sm-cur-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  font-family: var(--font-mono-stack);
+  color: var(--muted);
+}
+.sm-cur-unknown { font-family: inherit; font-style: italic; }
+.sm-tier {
+  font-family: var(--font-sans-stack);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.sm-tier.tier-free { color: #7fd6a8; background: rgba(127, 214, 168, 0.12); border-color: rgba(127, 214, 168, 0.3); }
+.sm-tier.tier-affordable { color: var(--accent-soft); background: var(--accent-quiet); border-color: rgba(139, 108, 239, 0.3); }
+.sm-tier.tier-premium { color: #f0c674; background: rgba(240, 198, 116, 0.12); border-color: rgba(240, 198, 116, 0.32); }
 .sm-custom-tag {
   margin-left: 7px;
   font-size: 9.5px;
@@ -647,13 +674,29 @@ button { font-family: inherit; }
   color: var(--faint);
   padding: 7px 10px 9px;
 }
+.sm-head-rule {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent-soft);
+  font-weight: 500;
+}
 /* onboarding (block) — stack the tiers in one column */
 .switcher-block .sm-cols { flex-direction: column; gap: 0; }
 .switcher-block .sm-col + .sm-col { border-left: none; padding-left: 0; }
+.si-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.si-cost {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono-stack);
+  color: var(--faint);
+  white-space: nowrap;
+}
+.si-cost.free { color: var(--accent-soft); }
 .switcher-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
   text-align: left;
   background: none;
