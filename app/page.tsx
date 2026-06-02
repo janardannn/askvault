@@ -35,7 +35,6 @@ export default function Page() {
   // setup form
   const [formKey, setFormKey] = useState("");
   const [formPass, setFormPass] = useState("");
-  const [formPass2, setFormPass2] = useState("");
   const [formModel, setFormModel] = useState(DEFAULT_MODEL);
   // unlock form
   const [unlockPass, setUnlockPass] = useState("");
@@ -91,7 +90,6 @@ export default function Page() {
     if (!formKey.trim()) return setError("Enter your OpenRouter API key.");
     if (formPass.length < 6)
       return setError("Use a passphrase of at least 6 characters.");
-    if (formPass !== formPass2) return setError("Passphrases don't match.");
 
     setBusy(true);
     try {
@@ -105,7 +103,6 @@ export default function Page() {
       setHandle(dir);
       setFormKey("");
       setFormPass("");
-      setFormPass2("");
       setPhase("ready");
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return; // folder pick canceled
@@ -246,16 +243,7 @@ export default function Page() {
                 type="password"
                 value={formPass}
                 onChange={(e) => setFormPass(e.target.value)}
-                placeholder="used to encrypt your key on this device"
-                autoComplete="new-password"
-              />
-            </label>
-            <label>
-              Confirm passphrase
-              <input
-                type="password"
-                value={formPass2}
-                onChange={(e) => setFormPass2(e.target.value)}
+                placeholder="encrypts your key on this device — you'll enter it to unlock"
                 autoComplete="new-password"
               />
             </label>

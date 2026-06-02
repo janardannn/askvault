@@ -11,6 +11,7 @@ import { ConstellationField } from "./ConstellationField";
 import { Markdown } from "./Markdown";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { HistoryPanel } from "./HistoryPanel";
+import { AboutPanel } from "./AboutPanel";
 import { Gem } from "./Gem";
 
 const EXAMPLES = [
@@ -35,6 +36,7 @@ export function Chat(props: {
 }) {
   const [model, setModel] = useState(props.model);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [active, setActive] = useState<{ id: string; initial: UIMessage[] }>(
     () => ({ id: newChatId(), initial: [] }),
   );
@@ -92,6 +94,17 @@ export function Chat(props: {
               <path d="M12 8v4l3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+          <button
+            className="icon-btn"
+            title="About askvault"
+            onClick={() => setAboutOpen(true)}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+              <path d="M12 11v5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="12" cy="7.5" r="1.2" fill="currentColor" />
+            </svg>
+          </button>
         </div>
         <div className="topbar-right">
           <ModelSwitcher value={model} onChange={changeModel} />
@@ -133,6 +146,8 @@ export function Chat(props: {
           }}
         />
       )}
+
+      {aboutOpen && <AboutPanel onClose={() => setAboutOpen(false)} />}
     </main>
   );
 }
