@@ -76,6 +76,30 @@ export async function deleteChat(id: string): Promise<void> {
   db.close();
 }
 
+/** Import chats from an export file, merging by id. Returns how many imported. */
+export async function importChats(raw: unknown): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const arr: any[] = Array.isArray(raw)
+    ? raw
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((raw as any)?.chats ?? []);
+  let n = 0;
+  for (const c of arr) {
+    if (!c || typeof c.id !== "string" || !Array.isArray(c.messages)) continue;
+    await putChat({
+      id: c.id,
+      title: c.title ?? deriveTitle(c.messages),
+      model: c.model ?? "",
+      vaultLabel: c.vaultLabel ?? "imported",
+      createdAt: c.createdAt ?? Date.now(),
+      updatedAt: c.updatedAt ?? Date.now(),
+      messages: c.messages,
+    });
+    n++;
+  }
+  return n;
+}
+
 /**
  * Save a turn's messages, preserving the original createdAt and refreshing
  * updatedAt + title. Skips empty conversations.

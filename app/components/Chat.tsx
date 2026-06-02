@@ -12,6 +12,7 @@ import { Markdown } from "./Markdown";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { HistoryPanel } from "./HistoryPanel";
 import { AboutPanel } from "./AboutPanel";
+import { MigratePanel } from "./MigratePanel";
 import { Gem } from "./Gem";
 
 const EXAMPLES = [
@@ -37,6 +38,7 @@ export function Chat(props: {
   const [model, setModel] = useState(props.model);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
   const [active, setActive] = useState<{ id: string; initial: UIMessage[] }>(
     () => ({ id: newChatId(), initial: [] }),
   );
@@ -96,6 +98,16 @@ export function Chat(props: {
           </button>
           <button
             className="icon-btn"
+            title="Import / export chats"
+            onClick={() => setMigrateOpen(true)}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden>
+              <path d="M8 21V7m0 14l-3.5-3.5M8 21l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M16 3v14m0-14l-3.5 3.5M16 3l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            className="icon-btn"
             title="About askvault"
             onClick={() => setAboutOpen(true)}
           >
@@ -148,6 +160,7 @@ export function Chat(props: {
       )}
 
       {aboutOpen && <AboutPanel onClose={() => setAboutOpen(false)} />}
+      {migrateOpen && <MigratePanel onClose={() => setMigrateOpen(false)} />}
     </main>
   );
 }

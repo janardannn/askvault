@@ -1061,6 +1061,49 @@ button { font-family: inherit; }
   .about-hero h1 { font-size: 30px; }
 }
 
+/* ============ Import/export modal ============ */
+.migrate-panel {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  border-radius: 18px;
+  padding: 26px 26px 24px;
+  background: #14131c;
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 60px -16px rgba(0, 0, 0, 0.75);
+  animation: cardIn 0.32s var(--ease-expo) both;
+}
+.migrate-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+.migrate-sub {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.migrate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.migrate-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.migrate-k { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.migrate-v { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.migrate-import { border-color: var(--border-strong); }
+.migrate-status {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--accent-soft);
+}
+
 /* ============ reduced motion ============ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
