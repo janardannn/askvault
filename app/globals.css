@@ -301,17 +301,37 @@ button { font-family: inherit; }
   border-radius: 15px;
   animation: rise 0.5s var(--ease-quint) both;
 }
+/* brand doubles as the "new chat" button */
 .brand-sm {
   display: flex;
   align-items: center;
   gap: 9px;
+  font-family: inherit;
   font-weight: 620;
   font-size: 15px;
   letter-spacing: -0.02em;
+  color: var(--text);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, transform 0.12s;
 }
-.brand-sm { cursor: default; }
+.brand-sm:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+.brand-sm:active { transform: scale(0.97); }
 /* navbar gem floats continuously, just like the hero gem */
 .brand-sm .gem { animation: float 5.5s ease-in-out infinite; }
+.brand-plus {
+  color: var(--faint);
+  opacity: 0;
+  margin-left: -2px;
+  transition: opacity 0.16s, color 0.16s;
+}
+.brand-sm:hover .brand-plus { opacity: 1; color: var(--accent-soft); }
 .topbar-right { display: flex; align-items: center; gap: 9px; }
 .topbar-left { display: flex; align-items: center; gap: 4px; }
 .icon-btn {

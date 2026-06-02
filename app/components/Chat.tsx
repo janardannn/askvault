@@ -74,12 +74,10 @@ export function Chat(props: {
     <main className="chat">
       <header className="topbar glass">
         <div className="topbar-left">
-          <div className="brand-sm">
+          <button className="brand-sm" title="New chat" onClick={newChat}>
             <Gem size={24} />
             <span>askvault</span>
-          </div>
-          <button className="icon-btn" title="New chat" onClick={newChat}>
-            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden>
+            <svg className="brand-plus" width="14" height="14" viewBox="0 0 24 24" aria-hidden>
               <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
