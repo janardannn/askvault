@@ -298,13 +298,23 @@ function ChatSession({
   const [input, setInput] = useState("");
   const busy = status === "submitted" || status === "streaming";
   const endRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<HTMLElement>(null);
+  const stickRef = useRef(true); // auto-scroll only while parked near the bottom
 
+  const onStreamScroll = useCallback(() => {
+    const el = streamRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // Follow new content only if the user hasn't scrolled up to read.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (stickRef.current) endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
   function submit(text: string) {
     if (!text.trim() || busy) return;
+    stickRef.current = true; // sending your own message always jumps to the bottom
     refreshIndex(); // pick up notes created/renamed since the chat opened
     // mark a model switch only when this message actually USES a different model
     // than the previous message — never on the first message or a mere dropdown change.
@@ -326,7 +336,11 @@ function ChatSession({
     <NoteLinksProvider value={noteIndex}>
       <ConstellationField active={busy} density={empty ? 1.25 : 0.55} quiet={!empty} />
 
-      <section className={`stream ${empty ? "is-empty" : ""}`}>
+      <section
+        ref={streamRef}
+        onScroll={onStreamScroll}
+        className={`stream ${empty ? "is-empty" : ""}`}
+      >
         {empty && (
           <div className="hero stagger">
             <div className="hero-gem" style={{ "--i": 0 } as React.CSSProperties}>
