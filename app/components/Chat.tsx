@@ -20,7 +20,17 @@ import { ModelSwitcher } from "./ModelSwitcher";
 import { HistoryPanel } from "./HistoryPanel";
 import { AboutPanel } from "./AboutPanel";
 import { MigratePanel } from "./MigratePanel";
+import { AgentPanel } from "./AgentPanel";
+import { ContextRing } from "./ContextRing";
 import { Gem } from "./Gem";
+import { contextUsage, type CtxUsage } from "@/lib/usage";
+import { getContextLength } from "@/lib/context";
+import {
+  buildExtraInstructions,
+  loadAgentConfig,
+  saveAgentConfig,
+  type AgentConfig,
+} from "@/lib/agent-config";
 
 const EXAMPLES = [
   "Where are my notes on this project?",
@@ -47,6 +57,18 @@ export function Chat(props: {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [migrateOpen, setMigrateOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>(() => ({
+    presets: [],
+    custom: "",
+  }));
+  // load persisted agent customization once on the client
+  useEffect(() => setAgentConfig(loadAgentConfig()), []);
+  const extra = useMemo(() => buildExtraInstructions(agentConfig), [agentConfig]);
+
+  const [usage, setUsage] = useState<CtxUsage>(() => contextUsage([], props.model));
+  const onUsage = useCallback((u: CtxUsage) => setUsage(u), []);
+
   const [active, setActive] = useState<{
     id: string;
     initial: UIMessage[];
@@ -56,6 +78,10 @@ export function Chat(props: {
   function changeModel(next: string) {
     setModel(next);
     saveModel(next);
+  }
+  function updateAgentConfig(next: AgentConfig) {
+    setAgentConfig(next);
+    saveAgentConfig(next);
   }
   function newChat() {
     setActive({ id: newChatId(), initial: [], events: [] });
@@ -104,6 +130,7 @@ export function Chat(props: {
               <path d="M12 8v4l3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+          <ContextRing usage={usage} onClick={() => setAgentOpen(true)} />
           <button
             className="icon-btn"
             title="Import / export chats"
@@ -154,6 +181,8 @@ export function Chat(props: {
         model={model}
         handle={props.handle}
         vaultLabel={props.vaultLabel}
+        extra={extra}
+        onUsage={onUsage}
       />
 
       {historyOpen && (
@@ -170,6 +199,14 @@ export function Chat(props: {
 
       {aboutOpen && <AboutPanel onClose={() => setAboutOpen(false)} />}
       {migrateOpen && <MigratePanel onClose={() => setMigrateOpen(false)} />}
+      {agentOpen && (
+        <AgentPanel
+          usage={usage}
+          config={agentConfig}
+          onChange={updateAgentConfig}
+          onClose={() => setAgentOpen(false)}
+        />
+      )}
     </main>
   );
 }
@@ -182,6 +219,8 @@ function ChatSession({
   model,
   handle,
   vaultLabel,
+  extra,
+  onUsage,
 }: {
   chatId: string;
   initialMessages: UIMessage[];
@@ -190,12 +229,17 @@ function ChatSession({
   model: string;
   handle: FileSystemDirectoryHandle;
   vaultLabel: string;
+  extra: string;
+  onUsage: (u: CtxUsage) => void;
 }) {
   // keep the latest model/vault readable inside stable callbacks
   const modelRef = useRef(model);
   modelRef.current = model;
   const vaultRef = useRef(vaultLabel);
   vaultRef.current = vaultLabel;
+  // read the latest agent customization live inside the (stable) agent
+  const extraRef = useRef(extra);
+  extraRef.current = extra;
   const messagesRef = useRef<UIMessage[]>(initialMessages);
 
   // UI-only system markers (model switched, context compacted) — never sent to the model
@@ -216,7 +260,13 @@ function ChatSession({
   const transport = useMemo(
     () =>
       new DirectChatTransport({
-        agent: createVaultAgent(apiKey, () => modelRef.current, handle, onCompact),
+        agent: createVaultAgent(
+          apiKey,
+          () => modelRef.current,
+          handle,
+          onCompact,
+          () => extraRef.current,
+        ),
         // stamp each assistant message with the model + a timestamp
         messageMetadata: () => ({
           model: modelRef.current,
@@ -278,6 +328,23 @@ function ChatSession({
     },
   });
   messagesRef.current = messages;
+
+  // live context-usage for the navbar ring. recompute on each message/model
+  // change; `ctxReady` bumps once the model catalog resolves so the window size
+  // (and thus the budget) is accurate rather than the fallback.
+  const [ctxReady, setCtxReady] = useState(0);
+  useEffect(() => {
+    let ok = true;
+    getContextLength(model).then(() => ok && setCtxReady((n) => n + 1));
+    return () => {
+      ok = false;
+    };
+  }, [model]);
+  const usage = useMemo(
+    () => contextUsage(messages, model),
+    [messages, model, ctxReady],
+  );
+  useEffect(() => onUsage(usage), [usage, onUsage]);
 
   // index the real vault so note references become "open in Obsidian" links.
   // re-walk it (cheap) on mount, on window focus (after editing in Obsidian),

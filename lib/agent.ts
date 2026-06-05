@@ -35,6 +35,7 @@ export function createVaultAgent(
   getModel: () => string,
   root: FileSystemDirectoryHandle,
   onCompact?: () => void,
+  getExtra?: () => string,
 ) {
   const openrouter = createOpenRouter({ apiKey, appName: "askvault" });
 
@@ -47,12 +48,18 @@ export function createVaultAgent(
       const model = getModel();
       const ctx = await getContextLength(model);
       const budget = budgetFor(ctx);
+      // user's extra behavior preferences (presets + free-form) — read live so
+      // panel edits apply on the next turn; added ON TOP of the locked base.
+      const extra = getExtra?.().trim();
       if (!Array.isArray(settings.messages)) {
         return { ...settings, model: openrouter(model) };
       }
       const compacted = compactModelMessages(settings.messages, budget);
       if (compacted.length < settings.messages.length) onCompact?.();
-      return { ...settings, model: openrouter(model), messages: compacted };
+      const messages = extra
+        ? [{ role: "system", content: extra }, ...compacted]
+        : compacted;
+      return { ...settings, model: openrouter(model), messages };
     },
     tools: {
       search_vault: tool({

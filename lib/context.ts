@@ -61,6 +61,14 @@ export async function getContextLength(modelId: string): Promise<number> {
   return ctxCache[modelId] ?? 32000;
 }
 
+/** Synchronous best-effort context length from the cache (fallback 32000).
+ *  Kicks off the catalog fetch in the background so later reads are accurate —
+ *  used by the live context ring, which can't await on every keystroke/token. */
+export function cachedContextLength(modelId: string): number {
+  if (!loaded && !loading) void ensureCatalog();
+  return ctxCache[modelId] ?? 32000;
+}
+
 /** Live $/1M pricing for any model id, or null if unknown. */
 export async function getModelPricing(
   modelId: string,

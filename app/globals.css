@@ -1461,3 +1461,153 @@ button { font-family: inherit; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- context ring (navbar) + agent panel ---------- */
+.ctx-ring {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, transform 0.12s;
+}
+.ctx-ring:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+.ctx-ring:active { transform: scale(0.92); }
+.ctx-ring svg { position: absolute; inset: 0; margin: auto; }
+.ctx-track { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 2.4; }
+.ctx-fill {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s var(--ease-quint), stroke 0.3s;
+}
+.ctx-num {
+  position: relative;
+  font-family: var(--font-mono-stack);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ring);
+  letter-spacing: -0.03em;
+}
+.ctx-cool { --ring: #57c98a; }
+.ctx-warm { --ring: #e3b341; }
+.ctx-hot { --ring: #f87a86; }
+
+.agent-panel {
+  position: relative;
+  width: 100%;
+  max-width: 540px;
+  max-height: 84vh;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #14131c;
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 60px -16px rgba(0, 0, 0, 0.75);
+  animation: cardIn 0.32s var(--ease-expo) both;
+}
+.agent-scroll { overflow-y: auto; max-height: 84vh; padding: 26px 26px 30px; }
+.agent-title { font-size: 19px; margin: 0 0 16px; }
+
+.agent-ctx {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 15px;
+  margin-bottom: 22px;
+}
+.agent-ctx-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.agent-ctx-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--ring);
+  transition: width 0.4s var(--ease-quint), background 0.3s;
+}
+.agent-ctx-row { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.agent-ctx-row strong {
+  font-family: var(--font-mono-stack);
+  font-size: 16px;
+  color: var(--ring);
+}
+.agent-ctx-note { font-size: 12px; margin: 9px 0 0; line-height: 1.5; }
+
+.agent-section { margin-bottom: 22px; }
+.agent-section:last-child { margin-bottom: 0; }
+.agent-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--faint);
+  margin: 0 0 6px;
+}
+.agent-sub { font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+.agent-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 22px 0;
+}
+.agent-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s, color 0.14s, transform 0.12s;
+}
+.agent-pill:hover { border-color: var(--border-strong); color: var(--text); }
+.agent-pill:active { transform: scale(0.96); }
+.agent-pill::before {
+  content: "+";
+  font-size: 13px;
+  line-height: 1;
+  color: var(--faint);
+  transition: color 0.14s;
+}
+.agent-pill.on {
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+  color: var(--text);
+}
+.agent-pill.on::before { content: "✓"; color: var(--accent-soft); }
+.agent-custom {
+  width: 100%;
+  resize: vertical;
+  min-height: 84px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.agent-custom:focus { outline: none; border-color: var(--accent); }
+.agent-custom::placeholder { color: var(--faint); }
+.agent-foot { font-size: 11.5px; margin: 9px 0 0; }
