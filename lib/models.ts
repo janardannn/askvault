@@ -15,6 +15,8 @@ export const FREE_MODELS: ModelOption[] = [
   { id: "qwen/qwen3-next-80b-a3b-instruct:free", label: "Qwen3 Next 80B", note: "Capable", inCost: 0, outCost: 0 },
   { id: "z-ai/glm-4.5-air:free", label: "GLM 4.5 Air", note: "Snappy", inCost: 0, outCost: 0 },
   { id: "moonshotai/kimi-k2.6:free", label: "Kimi K2.6", note: "Top open-weights", inCost: 0, outCost: 0 },
+  { id: "nvidia/nemotron-3-super-120b-a12b:free", label: "Nemotron 3 Super", note: "NVIDIA, fast MoE", inCost: 0, outCost: 0 },
+  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", label: "Nemotron 3 Ultra", note: "Biggest free", inCost: 0, outCost: 0 },
   { id: "meta-llama/llama-3.3-70b-instruct:free", label: "Llama 3.3 70B", note: "Well-rounded", inCost: 0, outCost: 0 },
 ];
 
@@ -22,8 +24,8 @@ export const FREE_MODELS: ModelOption[] = [
 export const AFFORDABLE_MODELS: ModelOption[] = [
   { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash", note: "Newest, cheap", inCost: 0.098, outCost: 0.197 },
   { id: "google/gemma-4-31b-it", label: "Gemma 4 31B", note: "Google, cheap", inCost: 0.12, outCost: 0.37 },
-  { id: "minimax/minimax-m2.5", label: "MiniMax M2.5", note: "Agent workhorse", inCost: 0.15, outCost: 1.15 },
-  { id: "qwen/qwen3.6-plus", label: "Qwen3.6 Plus", note: "Most-adopted", inCost: 0.325, outCost: 1.95 },
+  { id: "minimax/minimax-m3", label: "MiniMax M3", note: "Agent workhorse", inCost: 0.3, outCost: 1.2 },
+  { id: "qwen/qwen3.7-plus", label: "Qwen3.7 Plus", note: "Most-adopted", inCost: 0.4, outCost: 1.6 },
   { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", note: "Flagship", inCost: 0.435, outCost: 0.87 },
   { id: "xiaomi/mimo-v2.5-pro", label: "MiMo V2.5 Pro", note: "Usage leader", inCost: 0.435, outCost: 0.87 },
   { id: "moonshotai/kimi-k2.6", label: "Kimi K2.6", note: "Open-weights king", inCost: 0.684, outCost: 3.42 },
@@ -85,6 +87,7 @@ const PROVIDER_ICON: Record<string, string> = {
   "meta-llama": "meta",
   "z-ai": "chatglm",
   stepfun: "stepfun",
+  nvidia: "nvidia",
 };
 
 /** Path to the provider logo for a model id, or null (→ fall back to a dot). */
